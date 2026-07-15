@@ -9,18 +9,22 @@
 
 ## 📌 Trạng thái hiện tại
 - **Giai đoạn:** Tuần 1 — Core loop chạy được.
-- **Vừa xong:** Setup skeleton repo (src-layout, uv + hatchling, `.env.example`) — commit `73eacca`.
+- **Vừa xong:** Setup skeleton repo + hệ thống nhật ký tiến độ (PROGRESS.md + CLAUDE.md auto-load).
 - **Môi trường:** `uv sync` OK; package `deep_research_agent` cài editable; `import` → `0.1.0`.
-- **⚠️ Đang treo:** commit skeleton **CHƯA push** lên `origin/main` (local đang *ahead 1*).
+- **Git:** skeleton + progress setup đã **push** lên `origin/main`; local & remote đồng bộ.
 
 ## ⏭️ Việc tiếp theo
-1. **(Cần bạn quyết)** Push skeleton lên GitHub hay để sau.
-2. Tool layer — `src/deep_research_agent/tools/search.py`: hàm `search(query)` gọi Tavily + test mock (pytest).
-3. Tool layer — `src/deep_research_agent/tools/fetch.py`: hàm `fetch_url(url)` dùng `httpx` + `trafilatura` + test.
+1. Tool layer — `src/deep_research_agent/tools/search.py`: hàm `search(query)` gọi Tavily + test mock (pytest).
+2. Tool layer — `src/deep_research_agent/tools/fetch.py`: hàm `fetch_url(url)` dùng `httpx` + `trafilatura` + test.
 
 ---
 
 ## 🗒️ Nhật ký phiên (mới nhất ở trên)
+
+### 2026-07-16 — Nhật ký tiến độ "bán tự động" + push lên GitHub
+- Tạo `PROGRESS.md`; nối `@PROGRESS.md` vào `CLAUDE.md` (auto-load) + thêm quy ước tự cập nhật.
+- Đổi tên `Claude.md` → `CLAUDE.md` (chuẩn Linux/CI). Commit `3c440cf`.
+- **Push:** đẩy 2 commit (`73eacca`, `3c440cf`) lên `origin/main` — thành công, không cần auth.
 
 ### 2026-07-16 — Setup skeleton repo (Tuần 1, mục 1)
 **Đã làm**
