@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===== Project-specific =====
+# SQLite databases produced at runtime (e.g. ./data/research.db)
+*.db
+*.sqlite
+*.sqlite3
+data/
+# Generated report outputs
+reports/
+outputs/
+# NOTE: uv.lock is intentionally NOT ignored — commit it for reproducible installs.
