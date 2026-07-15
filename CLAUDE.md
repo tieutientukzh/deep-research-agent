@@ -115,4 +115,12 @@ research-agent/
 - Code có type hints, docstring ngắn; ưu tiên đơn giản dễ đọc hơn "clever".
 - Viết test cho tool layer và core loop (pytest); chạy test trước khi báo hoàn thành.
 - Commit git sau mỗi mục checklist hoàn thành, message rõ ràng.
+- Sau mỗi mục checklist hoàn thành (và cuối mỗi phiên): **cập nhật `PROGRESS.md`** — sửa "Trạng thái hiện tại" + "Việc tiếp theo", và thêm entry mới vào đầu "Nhật ký phiên". Làm chủ động, không cần đợi nhắc.
 - Trả lời/giải thích bằng tiếng Việt; code + comment bằng tiếng Anh.
+
+---
+
+## 📓 Nhật ký tiến độ phiên (tự động nạp)
+Trạng thái & lịch sử làm việc chi tiết nằm ở `PROGRESS.md`, được import ngay dưới đây để tự nạp vào ngữ cảnh mỗi phiên:
+
+@PROGRESS.md
