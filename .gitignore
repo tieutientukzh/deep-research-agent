@@ -226,4 +226,6 @@ data/
 # Generated report outputs
 reports/
 outputs/
+# Personal note/knowledge scratchpad — local only, not pushed
+Note.md
 # NOTE: uv.lock is intentionally NOT ignored — commit it for reproducible installs.
