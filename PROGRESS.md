@@ -11,7 +11,7 @@
 - **Giai đoạn:** Tuần 1 — Core loop chạy được.
 - **Vừa xong:** `core/llm_client.py` (LLMClient async: `complete` + `complete_json` + retry sửa JSON hỏng). 14 test pytest xanh, ruff + mypy sạch.
 - **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; mọi test dùng fake/mock, không gọi mạng thật.
-- **Git:** tool layer đã push (`c3c7cb0`); llm_client sắp commit.
+- **Git:** đã **push** tới `c93f5a8` (llm_client); local & remote đồng bộ.
 
 ## ⏭️ Việc tiếp theo
 1. ReAct loop đơn giản nhất: 1 agent, 2 tool (search+fetch), parse JSON tool call, tối đa 10 bước.
