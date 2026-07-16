@@ -9,17 +9,39 @@
 
 ## 📌 Trạng thái hiện tại
 - **Giai đoạn:** Tuần 1 — Core loop chạy được.
-- **Vừa xong:** Setup skeleton repo + hệ thống nhật ký tiến độ (PROGRESS.md + CLAUDE.md auto-load).
-- **Môi trường:** `uv sync` OK; package `deep_research_agent` cài editable; `import` → `0.1.0`.
-- **Git:** skeleton + progress setup đã **push** lên `origin/main`; local & remote đồng bộ.
+- **Vừa xong:** Tool layer `search()` + `fetch_url()` (async) + `core/schemas.py`; 8 test pytest xanh, ruff + mypy sạch.
+- **Môi trường:** `uv sync` OK; `asyncio_mode=auto` cho pytest-asyncio; test không gọi mạng thật (fake client + httpx_mock).
+- **Git:** commit `6657a86` (gitignore Note.md) chưa push; tool layer sắp commit.
 
 ## ⏭️ Việc tiếp theo
-1. Tool layer — `src/deep_research_agent/tools/search.py`: hàm `search(query)` gọi Tavily + test mock (pytest).
-2. Tool layer — `src/deep_research_agent/tools/fetch.py`: hàm `fetch_url(url)` dùng `httpx` + `trafilatura` + test.
+1. `core/llm_client.py`: wrapper Groq, structured output (ép JSON + parse an toàn + retry khi JSON hỏng).
+2. ReAct loop đơn giản nhất: 1 agent, 2 tool, parse JSON tool call, tối đa 10 bước.
 
 ---
 
 ## 🗒️ Nhật ký phiên (mới nhất ở trên)
+
+### 2026-07-16 — Tool layer: search() + fetch_url() + test (Tuần 1, mục 2)
+**Đã làm**
+- `core/schemas.py`: pydantic `SearchResult` (title/url/snippet/score) + `FetchResult`
+  (url/text/error/status_code + property `ok`). Đây là "hợp đồng" dữ liệu chung tool↔agent.
+- `tools/search.py`: `async search(query, *, max_results=5, client=None)` → `AsyncTavilyClient`,
+  map `results[].content` → `snippet`. Thiếu `TAVILY_API_KEY` → raise rõ ràng.
+- `tools/fetch.py`: `async fetch_url(url, *, timeout=10, client=None)` → httpx (follow_redirects,
+  User-Agent) + `trafilatura.extract`. **Không raise**: lỗi mạng / non-200 / trang rỗng đều
+  trả `FetchResult` có `error` → pipeline sống sót khi gặp URL hỏng.
+- `tests/tools/`: 4 test search (fake client) + 4 test fetch (`httpx_mock`) — **không gọi mạng**.
+
+**Quyết định chốt với user**
+- **Async** thay vì sync (user đổi ý giữa chừng) — dọn sẵn cho fetch song song sau này.
+- **Dependency Injection** (`client=None`): test truyền client giả → không cần mock lib, không cần key.
+- Kiểu trả về = **pydantic** đặt tập trung ở `core/schemas.py`.
+- **Docstring/comment viết bằng tiếng Việt** (user yêu cầu, override quy ước "comment tiếng Anh").
+
+**Verify**
+- `uv run pytest -v` → **8 passed**. `uv run ruff check .` → sạch. `uv run mypy src` → sạch
+  (thêm override `ignore_missing_imports` cho `tavily.*` vì lib thiếu stub).
+- Bật `asyncio_mode = "auto"` trong `pyproject.toml` để test async không cần decorator.
 
 ### 2026-07-16 — Nhật ký tiến độ "bán tự động" + push lên GitHub
 - Tạo `PROGRESS.md`; nối `@PROGRESS.md` vào `CLAUDE.md` (auto-load) + thêm quy ước tự cập nhật.

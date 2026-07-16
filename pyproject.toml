@@ -45,6 +45,8 @@ packages = ["src/deep_research_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# "auto" = any `async def test_*` runs under pytest-asyncio without a per-test decorator.
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
@@ -57,3 +59,9 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+# tavily-python ships no type stubs / py.typed marker — silence the missing-stub error
+# for just this third-party module instead of loosening strictness globally.
+[[tool.mypy.overrides]]
+module = ["tavily.*"]
+ignore_missing_imports = true

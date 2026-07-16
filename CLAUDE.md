@@ -73,7 +73,7 @@ research-agent/
 
 ### Tuần 1 — Core loop chạy được
 - [x] Setup repo (skeleton: `pyproject.toml` uv+hatchling, src-layout `deep_research_agent/`, `.env.example`, `.gitignore`) — đã commit + push
-- [ ] Tool layer: `search(query)`, `fetch_url(url)` — test độc lập từng tool (pytest, mock API)
+- [x] Tool layer: `search(query)`, `fetch_url(url)` — test độc lập từng tool (pytest, mock API)
 - [ ] `llm_client.py`: wrapper Groq, structured output (ép JSON + parse an toàn + retry khi JSON hỏng)
 - [ ] ReAct loop đơn giản nhất: 1 agent, 2 tool, parse JSON tool call, tối đa 10 bước
 - [ ] Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt
