@@ -11,7 +11,7 @@
 - **Giai đoạn:** Tuần 1 — Core loop chạy được (còn 1 mục cuối).
 - **Vừa xong:** `core/agent_loop.py` — ReAct loop tối giản (`run_agent`: 1 agent, 2 tool, JSON tool calling tự viết, max 10 bước). 22 test pytest xanh, ruff + mypy sạch.
 - **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; mọi test dùng fake/mock, không gọi mạng thật.
-- **Git:** local & remote đồng bộ tại `a946f31`; commit agent_loop chuẩn bị tạo.
+- **Git:** đã **push** tới `a3a23bd` (agent_loop + smoke test); local & remote đồng bộ.
 
 ## ⏭️ Việc tiếp theo
 1. Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt (**Milestone T1**).
