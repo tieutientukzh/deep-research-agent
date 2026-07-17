@@ -15,7 +15,8 @@
 
 ## ⏭️ Việc tiếp theo
 1. Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt (**Milestone T1**).
-2. (Chưa test với API thật — nên chạy thử `run_agent` với Groq/Tavily thật 1 lần trước khi làm pipeline.)
+2. Khi làm pipeline: chỉnh prompt/flow để agent chịu **fetch** nguồn thay vì chỉ đọc snippet
+   (finding từ smoke test bên dưới).
 
 ---
 
@@ -53,7 +54,12 @@
 
 **Verify**
 - `uv run pytest -v` → **22 passed** (14 cũ + 8 mới). `ruff check .` sạch. `mypy src` sạch.
-- Chưa smoke-test với API thật (để đầu phiên sau, trước khi làm pipeline).
+- **Smoke test với API thật (Groq + Tavily) — PASS**: task "PhoBERT là gì và do ai phát
+  triển?" → agent tự search 3 lần → finish với answer đúng (VinAI Research), 4 bước,
+  `stopped_by_limit=False`, JSON tool calling không lỗi lần nào.
+- ⚠️ **Finding:** agent (model fast `llama-3.1-8b-instant`) trả lời CHỈ từ snippet, không
+  hề gọi `fetch_url` dù prompt đã gợi ý — với câu hỏi khó hơn sẽ thiếu chiều sâu. Xử lý ở
+  pipeline (mục 5): ép flow fetch nguồn, hoặc dùng model strong cho quyết định.
 
 ### 2026-07-16 — llm_client.py: wrapper Groq + structured output (Tuần 1, mục 3)
 **Đã làm**
