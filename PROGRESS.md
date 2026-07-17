@@ -8,18 +8,52 @@
 ---
 
 ## 📌 Trạng thái hiện tại
-- **Giai đoạn:** Tuần 1 — Core loop chạy được.
-- **Vừa xong:** `core/llm_client.py` (LLMClient async: `complete` + `complete_json` + retry sửa JSON hỏng). 14 test pytest xanh, ruff + mypy sạch.
+- **Giai đoạn:** Tuần 1 — Core loop chạy được (còn 1 mục cuối).
+- **Vừa xong:** `core/agent_loop.py` — ReAct loop tối giản (`run_agent`: 1 agent, 2 tool, JSON tool calling tự viết, max 10 bước). 22 test pytest xanh, ruff + mypy sạch.
 - **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; mọi test dùng fake/mock, không gọi mạng thật.
-- **Git:** đã **push** tới `c93f5a8` (llm_client); local & remote đồng bộ.
+- **Git:** local & remote đồng bộ tại `a946f31`; commit agent_loop chuẩn bị tạo.
 
 ## ⏭️ Việc tiếp theo
-1. ReAct loop đơn giản nhất: 1 agent, 2 tool (search+fetch), parse JSON tool call, tối đa 10 bước.
-2. Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt.
+1. Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt (**Milestone T1**).
+2. (Chưa test với API thật — nên chạy thử `run_agent` với Groq/Tavily thật 1 lần trước khi làm pipeline.)
 
 ---
 
 ## 🗒️ Nhật ký phiên (mới nhất ở trên)
+
+### 2026-07-17 — agent_loop.py: ReAct loop tối giản (Tuần 1, mục 4)
+**Đã làm**
+- `core/schemas.py`: thêm `AgentDecision` (thought/action/args), `AgentStep` (decision +
+  observation — lịch sử để debug/SQLite sau này), `AgentResult` (answer/steps/stopped_by_limit).
+- `core/agent_loop.py`:
+  - `ToolSpec` (description cho prompt + `args_schema` pydantic + hàm `run` async) và
+    **tool registry** dict `{"search": ..., "fetch_url": ...}` — injectable để test.
+  - `run_agent(task, *, llm, tools=None, max_steps=10)`: vòng Reason→Act→Observe.
+    Mỗi vòng gọi `complete_json` ép `AgentDecision` → validate args bằng schema con →
+    gọi tool → kết quả thành observation (message `role="user"`, prefix `[Observation]`).
+  - Format observation: search = danh sách đánh số `n. title — url — snippet` (snippet
+    cắt 300 ký tự); fetch cắt 4000 ký tự + marker `...[truncated]`; fetch hỏng → báo lỗi
+    để agent chọn URL khác.
+  - System prompt tiếng Anh sinh từ registry; để sẵn TODO chỗ chèn delimiter chống
+    injection (Tuần 2).
+- `tests/core/test_agent_loop.py`: 8 test — happy path (search→fetch→finish, kiểm cả
+  messages đưa lại LLM); action lạ / args thiếu / finish thiếu answer → observation lỗi
+  rồi tự sửa; chạm `max_steps` → `stopped_by_limit`; 3 test runner mặc định (format
+  search, fetch lỗi, cắt text dài) qua monkeypatch.
+
+**Quyết định thiết kế**
+- **Lỗi của model là observation, không phải exception**: action lạ/args sai → đưa thông
+  báo lỗi vào hội thoại cho model tự sửa (chỉ `LLMJSONError` mới propagate — lỗi hạ tầng).
+- **`action: str` thay vì `Literal`** (lệch nhẹ so với plan đã duyệt, đã nêu lý do khi code):
+  Literal sẽ làm action lạ fail ngay trong retry của `complete_json` → crash, và hardcode
+  tên tool vào schema trong khi registry là injectable.
+- `finish` là action giả với args `{"answer": ...}` — model tự tuyên bố xong.
+- Observation qua message `role="user"` (không dùng `role="tool"` native) — đúng mục tiêu
+  tự viết function calling qua JSON.
+
+**Verify**
+- `uv run pytest -v` → **22 passed** (14 cũ + 8 mới). `ruff check .` sạch. `mypy src` sạch.
+- Chưa smoke-test với API thật (để đầu phiên sau, trước khi làm pipeline).
 
 ### 2026-07-16 — llm_client.py: wrapper Groq + structured output (Tuần 1, mục 3)
 **Đã làm**
