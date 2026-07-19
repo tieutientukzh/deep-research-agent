@@ -45,6 +45,38 @@ class FetchResult(BaseModel):
         return self.error is None and bool(self.text and self.text.strip())
 
 
+class Source(BaseModel):
+    """Một nguồn đã fetch THÀNH CÔNG, sẵn sàng đưa vào prompt của Writer.
+
+    ``id`` chính là số citation ``[n]`` trong báo cáo — gán tuần tự 1, 2, 3... theo thứ tự
+    nguồn được nhận vào pipeline. Giữ ``id`` ngay trong object (thay vì dựa vào vị trí
+    trong list) để về sau Note-taker/Writer có tráo thứ tự thì citation vẫn đúng.
+    """
+
+    id: int
+    title: str
+    url: str
+    text: str
+
+
+class PipelineResult(BaseModel):
+    """Kết quả một lần chạy pipeline thô end-to-end.
+
+    Hai nhánh kết cục:
+    - Thành công: ``report`` là Markdown, ``sources`` là các nguồn đã dùng.
+    - Thất bại lường trước (không fetch nổi nguồn nào): ``report=None`` và ``error`` ghi
+      lý do — pipeline KHÔNG raise cho các lỗi này, cùng triết lý với ``FetchResult``.
+
+    ``skipped_urls`` lưu các URL fetch hỏng để debug ("vì sao báo cáo ít nguồn?").
+    """
+
+    topic: str
+    report: str | None = None
+    sources: list[Source] = Field(default_factory=list)
+    skipped_urls: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 class AgentDecision(BaseModel):
     """Quyết định của LLM ở MỖI vòng ReAct: nghĩ gì (thought) và làm gì tiếp (action + args).
 

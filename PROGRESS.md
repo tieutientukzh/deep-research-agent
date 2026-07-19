@@ -8,19 +8,58 @@
 ---
 
 ## 📌 Trạng thái hiện tại
-- **Giai đoạn:** Tuần 1 — Core loop chạy được (còn 1 mục cuối).
-- **Vừa xong:** `core/agent_loop.py` — ReAct loop tối giản (`run_agent`: 1 agent, 2 tool, JSON tool calling tự viết, max 10 bước). 22 test pytest xanh, ruff + mypy sạch.
+- **Giai đoạn:** ✅ **Tuần 1 HOÀN THÀNH — Milestone T1 đạt.** Sang Tuần 2 — Kiến trúc đầy đủ.
+- **Vừa xong:** `pipeline.py` — pipeline thô end-to-end deterministic (search → fetch 3-5
+  nguồn → 1 lời gọi LLM viết báo cáo) + CLI `python -m deep_research_agent "<topic>"`.
+  29 test pytest xanh, ruff + mypy sạch. Smoke test API thật PASS (xem entry mới nhất).
 - **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; mọi test dùng fake/mock, không gọi mạng thật.
-- **Git:** đã **push** tới `a3a23bd` (agent_loop + smoke test); local & remote đồng bộ.
+- **Git:** đã **push** tới `a3a23bd`; commit pipeline đang chờ (xem entry mới nhất).
 
 ## ⏭️ Việc tiếp theo
-1. Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt (**Milestone T1**).
-2. Khi làm pipeline: chỉnh prompt/flow để agent chịu **fetch** nguồn thay vì chỉ đọc snippet
-   (finding từ smoke test bên dưới).
+1. Tuần 2, mục 1: tách **Planner** (phân rã sub-questions), mỗi sub-question chạy research
+   loop riêng — đây là lúc dùng lại `run_agent` (ReAct loop).
+2. Mang theo 2 finding từ smoke test pipeline: (a) chọn URL đáng đọc (YouTube/Scribd text
+   mỏng vẫn lọt), (b) Writer lệch về 1 nguồn — cần Note-taker + prompt cân bằng citation.
 
 ---
 
 ## 🗒️ Nhật ký phiên (mới nhất ở trên)
+
+### 2026-07-19 — pipeline.py: pipeline thô end-to-end (Tuần 1, mục 5 — Milestone T1 ✅)
+**Đã làm**
+- `core/schemas.py`: thêm `Source` (id/title/url/text — `id` chính là số citation `[n]`)
+  và `PipelineResult` (topic/report/sources/skipped_urls/error).
+- `pipeline.py` (top-level package): `run_pipeline(topic, *, llm, min_sources=3,
+  max_sources=5, search_max_results=8, search_fn, fetch_fn, on_progress)`:
+  - Flow **deterministic**: search 1 lần (topic làm query) → fetch tuần tự URL theo rank
+    (dedupe; URL hỏng → `skipped_urls`, thử URL kế) → đủ `max_sources` thì dừng →
+    1 lời gọi `llm.complete` (model strong) viết báo cáo Markdown.
+  - Text mỗi nguồn cắt 6000 ký tự. 0 nguồn sống → trả `error`, KHÔNG gọi LLM. Dưới
+    `min_sources` → vẫn viết nhưng cảnh báo qua `on_progress`.
+  - Prompt writer: báo cáo theo ngôn ngữ topic, cite `[n]` sau mỗi claim, cuối bài mục
+    `## Sources`. TODO Tuần 2: delimiter chống prompt injection.
+- `__main__.py`: CLI `python -m deep_research_agent "<topic>"` — progress ra stderr,
+  báo cáo ra stdout + lưu `reports/<slug>-<timestamp>.md` (gitignored).
+- `tests/test_pipeline.py`: 7 test (fake search/fetch qua DI + FakeGroq soi được prompt):
+  happy path (đúng max_sources, id 1..n, prompt chứa nguồn, dùng model strong); skip URL
+  hỏng lấy URL kế; 0 nguồn → error không gọi LLM; search rỗng → error; < min_sources vẫn
+  ra báo cáo + warning; dedupe URL; text dài bị cắt trong prompt.
+
+**Quyết định chốt với user**
+- **Hướng A — pipeline cố định (deterministic)** thay vì dựa trên ReAct loop: giải quyết
+  triệt để finding "agent lười fetch" (code ép fetch 100%), rẻ (1 lời gọi LLM/run), dễ
+  test. `run_agent` giữ nguyên làm nền cho Researcher Tuần 2.
+
+**Verify**
+- `uv run pytest -v` → **29 passed** (22 cũ + 7 mới). `ruff check .` sạch. `mypy src` sạch.
+- **Smoke test API thật (Groq + Tavily) — PASS**: topic "So sánh FAISS và ChromaDB cho
+  semantic search" → fetch 5/5 nguồn (0 skip) → báo cáo tiếng Việt đúng cấu trúc, có
+  citation `[n]` + mục `## Sources`, lưu file vào `reports/`. **Milestone T1 đạt.**
+- ⚠️ **Finding 1:** hầu hết claim chỉ cite `[2]` (bài Medium) — các nguồn YouTube/Scribd
+  trafilatura trích được rất ít text hữu ích nhưng vẫn đếm là "nguồn ok" → cần bước chọn
+  URL đáng đọc / lọc chất lượng nguồn (Tuần 2).
+- ⚠️ **Finding 2:** Writer không tự cân bằng citation giữa các nguồn → Note-taker (nén
+  nguồn thành notes đều nhau) + prompt Writer chặt hơn sẽ xử lý ở Tuần 2.
 
 ### 2026-07-17 — agent_loop.py: ReAct loop tối giản (Tuần 1, mục 4)
 **Đã làm**

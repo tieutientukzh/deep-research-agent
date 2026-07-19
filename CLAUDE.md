@@ -76,8 +76,8 @@ research-agent/
 - [x] Tool layer: `search(query)`, `fetch_url(url)` — test độc lập từng tool (pytest, mock API)
 - [x] `llm_client.py`: wrapper Groq, structured output (ép JSON + parse an toàn + retry khi JSON hỏng)
 - [x] ReAct loop đơn giản nhất: 1 agent, 2 tool, parse JSON tool call, tối đa 10 bước
-- [ ] Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt
-- **Milestone T1:** nhập chủ đề → ra báo cáo, dù chất lượng trung bình
+- [x] Pipeline thô end-to-end: query → search → fetch 3-5 nguồn → báo cáo 1 lượt
+- **Milestone T1:** nhập chủ đề → ra báo cáo, dù chất lượng trung bình ✅ (2026-07-19)
 
 ### Tuần 2 — Kiến trúc đầy đủ
 - [ ] Tách Planner (sub-questions), mỗi sub-question chạy research loop riêng
