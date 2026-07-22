@@ -7,6 +7,7 @@ và pydantic validate ngay tại ranh giới, nên một response API dị dạn
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -68,13 +69,43 @@ class PipelineResult(BaseModel):
       lý do — pipeline KHÔNG raise cho các lỗi này, cùng triết lý với ``FetchResult``.
 
     ``skipped_urls`` lưu các URL fetch hỏng để debug ("vì sao báo cáo ít nguồn?").
+    ``sub_questions`` chỉ được điền ở chế độ deep (Planner phân rã topic) — rỗng ở
+    pipeline thô. Giữ trong cùng một schema để CLI/UI xử lý hai chế độ đồng nhất.
     """
 
     topic: str
     report: str | None = None
     sources: list[Source] = Field(default_factory=list)
     skipped_urls: list[str] = Field(default_factory=list)
+    sub_questions: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+class ResearchPlan(BaseModel):
+    """Kế hoạch nghiên cứu do Planner sinh ra: topic được phân rã thành các sub-question.
+
+    Đây là structured output của Planner (``complete_json``). Cố ý CHỈ validate "có ít
+    nhất 1 câu" ở đây — việc siết trần 3-6 câu để trong code Planner, KHÔNG đặt vào schema:
+    nếu model lỡ trả 7 câu mà schema từ chối thì ``complete_json`` sẽ tốn lượt retry rồi
+    cuối cùng crash, trong khi thừa câu là chuyện code tự clamp được, không phải lỗi.
+    """
+
+    sub_questions: list[str] = Field(min_length=1)
+
+
+class SubQuestionResult(BaseModel):
+    """Kết quả research MỘT sub-question qua ReAct loop.
+
+    ``answer`` là câu trả lời model tự tổng hợp (có thể ``None`` nếu loop chạm giới hạn
+    bước trước khi kịp ``finish``). ``source_ids`` là các id ``[n]`` toàn cục (trong
+    ``SourceRegistry``) mà sub-question này đã fetch được — nhờ vậy Writer biết mỗi phần
+    báo cáo dựa trên nguồn nào. ``stopped_by_limit`` phân biệt "trả lời xong" với "hết bước".
+    """
+
+    question: str
+    answer: str | None = None
+    source_ids: list[int] = Field(default_factory=list)
+    stopped_by_limit: bool = False
 
 
 class AgentDecision(BaseModel):
@@ -119,3 +150,9 @@ class AgentResult(BaseModel):
     answer: str | None = None
     steps: list[AgentStep] = Field(default_factory=list)
     stopped_by_limit: bool = False
+
+
+# Kiểu của 2 hàm tool được inject khắp pipeline (mặc định là tool thật của tầng tools).
+# Đặt ở đây — nơi trung lập — để cả pipeline lẫn researcher dùng chung mà không import vòng.
+SearchFn = Callable[..., Awaitable[list["SearchResult"]]]
+FetchFn = Callable[..., Awaitable["FetchResult"]]

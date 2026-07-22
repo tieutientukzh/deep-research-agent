@@ -197,6 +197,38 @@ async def test_stops_at_max_steps_without_finish() -> None:
     assert len(calls["search"]) == 3
 
 
+async def test_model_param_is_passed_to_llm() -> None:
+    llm, fake = _make_llm([_decision("finish", {"answer": "ok"})])
+    tools, _calls = _make_fake_tools()
+
+    await run_agent("task", llm=llm, tools=tools, model="strong-model")
+
+    # Mỗi vòng quyết định phải gọi đúng model được chỉ định.
+    assert fake.chat.completions.calls[0]["model"] == "strong-model"
+
+
+async def test_validate_finish_rejection_continues_loop() -> None:
+    # validate_finish từ chối lần đầu (answer chưa "đủ") → loop tiếp; lần sau chấp nhận.
+    llm, _fake = _make_llm(
+        [
+            _decision("finish", {"answer": "too short"}),
+            _decision("finish", {"answer": "a long enough answer"}),
+        ]
+    )
+    tools, _calls = _make_fake_tools()
+
+    def validate_finish(answer: str) -> str | None:
+        return "Error: answer too short, keep researching." if len(answer) < 10 else None
+
+    result = await run_agent(
+        "task", llm=llm, tools=tools, validate_finish=validate_finish
+    )
+
+    assert result.answer == "a long enough answer"
+    assert "too short" in result.steps[0].observation
+    assert len(result.steps) == 2
+
+
 # ---- Test runner mặc định (format + cắt bớt), monkeypatch tool thật bên dưới ----
 
 

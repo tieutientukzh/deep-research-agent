@@ -17,7 +17,7 @@ from pathlib import Path
 
 from deep_research_agent.core.llm_client import LLMClient
 from deep_research_agent.core.schemas import PipelineResult
-from deep_research_agent.pipeline import run_pipeline
+from deep_research_agent.pipeline import run_deep_pipeline, run_pipeline
 
 
 def _slugify(text: str, *, max_len: int = 50) -> str:
@@ -47,12 +47,27 @@ async def _main() -> int:
     )
     parser.add_argument("topic", help="Chủ đề nghiên cứu (tiếng Việt hoặc tiếng Anh)")
     parser.add_argument(
-        "--max-sources", type=int, default=5, help="Số nguồn tối đa (mặc định 5)"
+        "--mode",
+        choices=["deep", "simple"],
+        default="deep",
+        help=(
+            "deep = Planner + Researcher loop mỗi sub-question (kiến trúc đích); "
+            "simple = pipeline thô 1 lượt (baseline). Mặc định deep."
+        ),
+    )
+    parser.add_argument(
+        "--max-sources",
+        type=int,
+        default=5,
+        help="Số nguồn tối đa cho mode simple (mặc định 5)",
     )
     args = parser.parse_args()
 
     llm = LLMClient()  # raise sớm nếu thiếu GROQ_API_KEY — lỗi cấu hình cần biết ngay
-    result = await run_pipeline(args.topic, llm=llm, max_sources=args.max_sources)
+    if args.mode == "deep":
+        result = await run_deep_pipeline(args.topic, llm=llm)
+    else:
+        result = await run_pipeline(args.topic, llm=llm, max_sources=args.max_sources)
 
     if result.report is None:
         print(f"Pipeline failed: {result.error}", file=sys.stderr)
@@ -61,6 +76,8 @@ async def _main() -> int:
     saved_path = _save_report(result)
     print(result.report)
     print(f"\nReport saved to {saved_path}", file=sys.stderr)
+    if result.sub_questions:
+        print(f"Sub-questions researched: {len(result.sub_questions)}", file=sys.stderr)
     if result.skipped_urls:
         print(f"Skipped URLs (fetch failed): {len(result.skipped_urls)}", file=sys.stderr)
     return 0

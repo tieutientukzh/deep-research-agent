@@ -8,22 +8,71 @@
 ---
 
 ## 📌 Trạng thái hiện tại
-- **Giai đoạn:** ✅ **Tuần 1 HOÀN THÀNH — Milestone T1 đạt.** Sang Tuần 2 — Kiến trúc đầy đủ.
-- **Vừa xong:** `pipeline.py` — pipeline thô end-to-end deterministic (search → fetch 3-5
-  nguồn → 1 lời gọi LLM viết báo cáo) + CLI `python -m deep_research_agent "<topic>"`.
-  29 test pytest xanh, ruff + mypy sạch. Smoke test API thật PASS (xem entry mới nhất).
-- **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; mọi test dùng fake/mock, không gọi mạng thật.
-- **Git:** đã **push** tới `a3a23bd`; commit pipeline đang chờ (xem entry mới nhất).
+- **Giai đoạn:** 🚧 **Tuần 2 — Kiến trúc đầy đủ.** ✅ Mục 1 (Planner + Researcher loop) XONG.
+- **Vừa xong:** **Planner + Researcher (deep mode)** — `plan_research` phân rã topic thành
+  3-6 sub-question (model fast); mỗi sub-question chạy `run_agent` (ReAct) với **model strong
+  70B + guard `validate_finish`** (ép fetch ≥1 nguồn trước khi finish); `SourceRegistry` giữ
+  citation `[n]` toàn cục (dedupe URL); `run_deep_pipeline` gộp lại → Writer. CLI thêm
+  `--mode deep|simple` (mặc định deep). **41 test xanh**, ruff + mypy sạch. Smoke API thật
+  (deep + simple) PASS (xem entry mới nhất). Kiến thức phiên ghi vào `NOTE.md`.
+- **Môi trường:** `uv sync` OK; `asyncio_mode=auto`; test dùng fake/mock, không gọi mạng thật.
+  ⚠️ `pytest.exe` bị Windows Application Control chặn (os error 4551) → chạy
+  `uv run python -m pytest` (KHÔNG `uv run pytest`).
+- **Git:** đã **push** tới `a3a23bd`; commit pipeline (T1) + commit deep mode (phiên này) đang chờ push.
 
 ## ⏭️ Việc tiếp theo
-1. Tuần 2, mục 1: tách **Planner** (phân rã sub-questions), mỗi sub-question chạy research
-   loop riêng — đây là lúc dùng lại `run_agent` (ReAct loop).
-2. Mang theo 2 finding từ smoke test pipeline: (a) chọn URL đáng đọc (YouTube/Scribd text
-   mỏng vẫn lọt), (b) Writer lệch về 1 nguồn — cần Note-taker + prompt cân bằng citation.
+1. Tuần 2, mục 2: **Điều kiện dừng thông minh** — hiện Researcher chỉ có guard "≥1 nguồn" +
+   `max_steps`. Thêm tự đánh giá `sufficient/missing` (structured output) để dừng có lý trí.
+2. Tuần 2, mục 3: **Note-taker** — nén mỗi nguồn thành notes đều nhau, gắn `[source_id]`
+   → xử lý finding "Writer bỏ sót/lệch nguồn" (smoke test deep: `[3]` liệt kê nhưng không cite).
+3. Dọn dẹp nhỏ (không gấp): 3 file test cũ vẫn có `FakeGroq` cục bộ — dời sang `tests/conftest.py`
+   (đã có fixture `make_llm`/`decision` dùng chung cho test mới).
 
 ---
 
 ## 🗒️ Nhật ký phiên (mới nhất ở trên)
+
+### 2026-07-22 — Planner + Researcher loop mỗi sub-question (Tuần 2, mục 1)
+**Đã làm**
+- `core/schemas.py`: thêm `ResearchPlan` (structured output Planner — chỉ validate ≥1 câu,
+  clamp trần để trong code), `SubQuestionResult` (question/answer/source_ids/stopped_by_limit),
+  `PipelineResult.sub_questions`. Dời type alias `SearchFn`/`FetchFn` về đây (nơi trung lập)
+  để pipeline ↔ researcher không import vòng.
+- `core/sources.py` (MỚI): `SourceRegistry` — sổ cái nguồn dùng chung, cấp id `[n]` toàn cục,
+  **dedupe theo URL** xuyên các sub-question; truncate text ~6000 ký tự.
+- `core/agent_loop.py`: `run_agent` thêm 2 param backward-compatible — `model` (truyền xuống
+  `complete_json`) và `validate_finish` (hook chặn `finish`, trả lỗi → observation cho model sửa).
+- `agents/planner.py` (MỚI): `plan_research(topic, *, llm, max_questions=6)` — model FAST, prompt
+  yêu cầu 3-6 sub-question cùng ngôn ngữ topic; code strip/dedupe/clamp, fallback về topic nếu rỗng.
+- `agents/researcher.py` (MỚI): `research_sub_question(...)` — dựng tool registry closure bọc
+  `search_fn`/`fetch_fn` + `registry` + `on_progress`; fetch thành công → `registry.add` (agent
+  không biết); guard closure ép fetch ≥1 nguồn trước finish; gọi `run_agent(model=strong)`.
+- `pipeline.py`: `run_deep_pipeline` (Planner → mỗi sub-question chạy Researcher tuần tự, chung
+  1 registry → Writer 1 lượt với prompt deep mở rộng: nhận research notes + nguồn `[n]`). **Giữ
+  nguyên `run_pipeline` cũ** làm baseline cho ablation Tuần 3.
+- `__main__.py`: flag `--mode deep|simple` (mặc định deep).
+- Test: `tests/conftest.py` (MỚI — fixture `make_llm`/`decision` dùng chung); `tests/agents/`
+  test_planner (4) + test_researcher (4); mở rộng test_agent_loop (model passthrough,
+  validate_finish) + test_pipeline (deep happy path, 0 nguồn → error không gọi Writer).
+
+**Quyết định chốt với user**
+- **Researcher dùng model STRONG 70B + guard code** (không phải fast/prompt-only): thứ tự tin
+  cậy `code > model > prompt` (defense in depth) — xem `NOTE.md` mục [2026-07-22].
+- **Kéo trước một phần mục 4 (SourceRegistry)** vào phiên này để deep mode không mất citation
+  `[n]` — nếu chỉ đưa answer text tự do cho Writer thì báo cáo thụt lùi so với T1.
+
+**Verify**
+- `uv run python -m pytest -q` → **41 passed** (29 cũ + 12 mới). `ruff check .` sạch. `mypy src` sạch.
+- **Smoke test API thật (Groq + Tavily) — PASS**:
+  - **deep**: "So sánh LoRA và QLoRA khi fine-tune LLM" → Planner ra 5 sub-question tiếng Việt;
+    mỗi sub-question fetch nguồn thật (guard hoạt động — không còn cảnh trả lời từ mỗi snippet);
+    dedupe (vmixvietnam fetch ở sub-q1 & sub-q5 → cùng `[1]`) → 5 nguồn; báo cáo có citation
+    `[1]..[5]` + `## Sources`.
+  - **simple**: "What is FAISS?" → baseline vẫn chạy, skip URL 403 rồi lấy URL kế → 3 nguồn.
+- ✅ **Cải thiện so với T1:** citation đã **cân bằng across nguồn** (`[1][2][4][5]` đều được cite),
+  không còn dồn về 1 nguồn như finding T1.
+- ⚠️ **Finding:** Writer vẫn bỏ sót nguồn (`[3]` liệt kê nhưng không cite trong thân bài) → để
+  Note-taker (mục 3) + prompt Writer chặt hơn xử lý.
 
 ### 2026-07-19 — pipeline.py: pipeline thô end-to-end (Tuần 1, mục 5 — Milestone T1 ✅)
 **Đã làm**

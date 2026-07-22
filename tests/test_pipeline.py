@@ -9,9 +9,15 @@ Fake ở BA tầng, không test nào chạm mạng:
 
 from __future__ import annotations
 
+import json
+
 from deep_research_agent.core.llm_client import LLMClient
 from deep_research_agent.core.schemas import FetchResult, SearchResult
-from deep_research_agent.pipeline import _MAX_SOURCE_CHARS, run_pipeline
+from deep_research_agent.pipeline import (
+    _MAX_SOURCE_CHARS,
+    run_deep_pipeline,
+    run_pipeline,
+)
 
 # ---- Groq giả: trả lần lượt nội dung trong hàng đợi (mirror test_llm_client.py) ----
 
@@ -240,3 +246,70 @@ async def test_long_source_text_is_truncated_in_prompt():
     assert len(source_text) <= _MAX_SOURCE_CHARS + len("\n...[truncated]")
     (call,) = fake.chat.completions.calls
     assert "...[truncated]" in call["messages"][1]["content"]
+
+
+# ---- Chế độ DEEP (Planner → Researcher → Writer) ----
+
+
+def _decision(action: str, args: dict) -> str:
+    return json.dumps({"thought": "t", "action": action, "args": args})
+
+
+async def test_deep_pipeline_happy_path():
+    # Một hàng đợi phục vụ mọi lời gọi LLM theo thứ tự: planner → researcher steps → writer.
+    llm, fake = _make_llm(
+        [
+            '{"sub_questions": ["What is A?"]}',  # planner
+            _decision("search", {"query": "A"}),  # researcher: search
+            _decision("fetch_url", {"url": "https://example.com/1"}),  # fetch
+            _decision("finish", {"answer": "A is a thing."}),  # finish
+            "# Report\nA is a thing [1].\n## Sources\n[1] Title 1 — ...",  # writer
+        ]
+    )
+
+    result = await run_deep_pipeline(
+        "topic A",
+        llm=llm,
+        search_fn=_make_search_fn(_results(3)),
+        fetch_fn=_make_fetch_fn(),
+        on_progress=lambda _m: None,
+    )
+
+    assert result.error is None
+    assert result.sub_questions == ["What is A?"]
+    assert [s.id for s in result.sources] == [1]
+    assert result.report is not None and "A is a thing" in result.report
+
+    # Prompt Writer (lời gọi LLM cuối) chứa research notes + nguồn đánh số toàn cục.
+    writer_content = fake.chat.completions.calls[-1]["messages"][1]["content"]
+    assert "Research notes" in writer_content
+    assert "What is A?" in writer_content
+    assert "[1] Title 1 (https://example.com/1)" in writer_content
+    # Writer dùng model strong.
+    assert fake.chat.completions.calls[-1]["model"] == "strong-model"
+
+
+async def test_deep_pipeline_no_sources_returns_error_without_writer():
+    # Researcher chạm max_steps mà không fetch được gì → registry rỗng → error, KHÔNG viết.
+    llm, fake = _make_llm(
+        [
+            '{"sub_questions": ["Q?"]}',  # planner
+            _decision("search", {"query": "x"}),  # step 1 (max_steps=2)
+            _decision("search", {"query": "y"}),  # step 2 → chạm giới hạn
+        ]
+    )
+
+    result = await run_deep_pipeline(
+        "topic",
+        llm=llm,
+        search_fn=_make_search_fn(_results(3)),
+        fetch_fn=_make_fetch_fn(),
+        max_steps_per_question=2,
+        on_progress=lambda _m: None,
+    )
+
+    assert result.report is None
+    assert result.error is not None and "no source" in result.error
+    assert result.sub_questions == ["Q?"]
+    # Đúng 3 lời gọi LLM (planner + 2 researcher), KHÔNG có lời gọi Writer.
+    assert len(fake.chat.completions.calls) == 3

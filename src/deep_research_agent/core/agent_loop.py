@@ -176,6 +176,8 @@ async def run_agent(
     llm: LLMClient,
     tools: dict[str, ToolSpec] | None = None,
     max_steps: int = 10,
+    model: str | None = None,
+    validate_finish: Callable[[str], str | None] | None = None,
 ) -> AgentResult:
     """Chạy vòng lặp ReAct cho một ``task`` đến khi model ``finish`` hoặc hết ``max_steps``.
 
@@ -184,6 +186,11 @@ async def run_agent(
         llm: client LLM (test truyền client với Groq giả).
         tools: registry tool; bỏ trống dùng ``default_tools()`` (test truyền tool giả).
         max_steps: giới hạn cứng số vòng — lưới an toàn cuối cùng chống loop vô hạn.
+        model: model đưa quyết định mỗi vòng; bỏ trống dùng mặc định của ``complete_json``
+            (model fast). Researcher truyền ``llm.model_strong`` để chọn URL/query tốt hơn.
+        validate_finish: hook chặn ``finish`` — nhận ``answer``, trả về chuỗi lỗi (sẽ thành
+            observation để model tự sửa, đúng triết lý "lỗi là observation") hoặc ``None``
+            để chấp nhận. Dùng cho guard "phải fetch ≥1 nguồn trước khi finish".
 
     Returns:
         ``AgentResult`` — có ``answer`` nếu model finish; ``stopped_by_limit=True`` nếu
@@ -201,7 +208,7 @@ async def run_agent(
     steps: list[AgentStep] = []
 
     for _step in range(max_steps):
-        decision = await llm.complete_json(messages, AgentDecision)
+        decision = await llm.complete_json(messages, AgentDecision, model=model)
         # Echo lại quyết định vào hội thoại để model "nhớ" các bước trước của chính nó.
         messages.append({"role": "assistant", "content": decision.model_dump_json()})
 
@@ -216,6 +223,16 @@ async def run_agent(
                     {"role": "user", "content": f"[Observation]\n{observation}"}
                 )
                 continue
+            # Guard tùy chọn: chưa đủ điều kiện để kết thúc (VD chưa fetch nguồn nào) →
+            # từ chối như một observation lỗi, ép model làm tiếp thay vì trả lời vội.
+            if validate_finish is not None:
+                reject = validate_finish(finish.answer)
+                if reject is not None:
+                    steps.append(AgentStep(decision=decision, observation=reject))
+                    messages.append(
+                        {"role": "user", "content": f"[Observation]\n{reject}"}
+                    )
+                    continue
             steps.append(AgentStep(decision=decision, observation="(finished)"))
             return AgentResult(answer=finish.answer, steps=steps)
 

@@ -80,7 +80,8 @@ research-agent/
 - **Milestone T1:** nhập chủ đề → ra báo cáo, dù chất lượng trung bình ✅ (2026-07-19)
 
 ### Tuần 2 — Kiến trúc đầy đủ
-- [ ] Tách Planner (sub-questions), mỗi sub-question chạy research loop riêng
+- [x] Tách Planner (sub-questions), mỗi sub-question chạy research loop riêng — Planner
+  (model fast) + Researcher (ReAct, model strong + guard fetch) + SourceRegistry, `--mode deep`
 - [ ] Điều kiện dừng thông minh (agent tự đánh giá sufficient/missing, giới hạn cứng số vòng)
 - [ ] Note-taker nén nguồn thành notes gắn [source_id]
 - [ ] Hệ thống citation: source registry → Writer bắt buộc cite [n] → danh sách nguồn cuối báo cáo
