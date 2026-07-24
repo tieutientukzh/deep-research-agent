@@ -7,11 +7,13 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "NPHieu" }]
-keywords = ["llm", "agent", "research", "rag", "groq", "tavily"]
+keywords = ["llm", "agent", "research", "rag", "gemini", "groq", "tavily"]
 
 # Core runtime dependencies — enough for Weeks 1-3 (heavy UI/API deps stay optional)
 dependencies = [
-    "groq>=0.11",          # LLM client (Groq API)
+    # One SDK for every provider: Gemini and Groq both expose an OpenAI-compatible
+    # endpoint, so we only swap `base_url` instead of maintaining two client libraries.
+    "openai>=1.50",        # LLM client (points at Gemini / Groq via base_url)
     "python-dotenv>=1.0",  # load secrets from .env
     "pydantic>=2.7",       # structured-output schemas + validation
     "tenacity>=9.0",       # retry with exponential backoff

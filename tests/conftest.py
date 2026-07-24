@@ -1,14 +1,17 @@
 """Fixture dùng chung cho toàn bộ test — không test nào chạm mạng thật.
 
-``FakeGroq`` đóng thế ``AsyncGroq``: mô phỏng đúng hình dạng response thật
+``FakeLLM`` đóng thế ``AsyncOpenAI``: mô phỏng đúng hình dạng response thật
 (``response.choices[0].message.content``) và trả nội dung theo HÀNG ĐỢI, nhờ đó mô phỏng
 được cả chuỗi quyết định của agent lẫn tình huống "lần 1 JSON hỏng, lần 2 đúng".
+
+Vì mọi provider (Gemini/Groq) đều đi qua endpoint OpenAI-compatible với CÙNG hình dạng
+``chat.completions.create(...)``, một fake duy nhất này phục vụ được mọi provider.
 
 pytest tự nạp ``conftest.py`` này cho mọi test ở các thư mục con → fixture ``make_llm`` và
 ``decision`` dùng được ở khắp nơi mà không cần import.
 
 Ghi chú: ba file test cũ (test_llm_client / test_agent_loop / test_pipeline) hiện vẫn giữ
-bản ``FakeGroq`` cục bộ của riêng chúng; có thể dời chúng sang đây sau (dọn dẹp, không gấp).
+bản fake cục bộ của riêng chúng; có thể dời chúng sang đây sau (dọn dẹp, không gấp).
 """
 
 from __future__ import annotations
@@ -51,7 +54,7 @@ class _FakeChat:
         self.completions = _FakeCompletions(contents)
 
 
-class FakeGroq:
+class FakeLLM:
     """Trả lần lượt các nội dung trong ``contents`` mỗi lần ``chat.completions.create``."""
 
     def __init__(self, contents: list[str]) -> None:
@@ -59,16 +62,16 @@ class FakeGroq:
 
 
 @pytest.fixture
-def make_llm() -> Callable[..., tuple[LLMClient, FakeGroq]]:
-    """Factory: ``make_llm(contents) -> (llm, fake)`` — LLM bọc FakeGroq trả theo hàng đợi."""
+def make_llm() -> Callable[..., tuple[LLMClient, FakeLLM]]:
+    """Factory: ``make_llm(contents) -> (llm, fake)`` — LLM bọc FakeLLM trả theo hàng đợi."""
 
     def _factory(
         contents: list[str],
         *,
         model_fast: str = "fast-model",
         model_strong: str = "strong-model",
-    ) -> tuple[LLMClient, FakeGroq]:
-        fake = FakeGroq(contents)
+    ) -> tuple[LLMClient, FakeLLM]:
+        fake = FakeLLM(contents)
         llm = LLMClient(client=fake, model_fast=model_fast, model_strong=model_strong)
         return llm, fake
 

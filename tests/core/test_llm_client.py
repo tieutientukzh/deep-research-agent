@@ -1,6 +1,6 @@
 """Test cho ``LLMClient``.
 
-Ta dựng một Groq GIẢ mô phỏng đúng hình dạng response thật
+Ta dựng một client GIẢ mô phỏng đúng hình dạng response thật
 (``response.choices[0].message.content``) và trả nội dung theo HÀNG ĐỢI, nhờ đó mô phỏng được
 tình huống "lần 1 model trả JSON hỏng, lần 2 trả đúng". Không có test nào gọi mạng thật.
 """
@@ -44,15 +44,15 @@ class _FakeChat:
         self.completions = _FakeCompletions(contents)
 
 
-class FakeGroq:
-    """Đóng thế ``AsyncGroq``: trả lần lượt các nội dung trong ``contents``."""
+class FakeLLM:
+    """Đóng thế ``AsyncOpenAI``: trả lần lượt các nội dung trong ``contents``."""
 
     def __init__(self, contents: list[str]) -> None:
         self.chat = _FakeChat(contents)
 
 
-def _make_client(contents: list[str]) -> tuple[LLMClient, FakeGroq]:
-    fake = FakeGroq(contents)
+def _make_client(contents: list[str]) -> tuple[LLMClient, FakeLLM]:
+    fake = FakeLLM(contents)
     client = LLMClient(client=fake, model_fast="fast-model", model_strong="strong-model")
     return client, fake
 
@@ -71,7 +71,9 @@ async def test_complete_returns_text() -> None:
     assert out == "Xin chào"
     # complete() KHÔNG bật JSON mode và mặc định dùng model mạnh.
     call = fake.chat.completions.calls[0]
-    assert call["response_format"] is None
+    # response_format phải VẮNG MẶT hẳn (không phải None): một số endpoint
+    # OpenAI-compatible từ chối `"response_format": null` gửi tường minh.
+    assert "response_format" not in call
     assert call["model"] == "strong-model"
 
 
@@ -118,9 +120,70 @@ async def test_complete_json_gives_up_raises() -> None:
     assert len(fake.chat.completions.calls) == 3
 
 
-async def test_missing_api_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture
+def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    """Cô lập khỏi .env thật của máy dev: chặn load_dotenv + xóa mọi biến liên quan."""
     monkeypatch.setattr("deep_research_agent.core.llm_client.load_dotenv", lambda *a, **k: None)
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    for var in (
+        "LLM_PROVIDER",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "GEMINI_MODEL_FAST",
+        "GEMINI_MODEL_STRONG",
+        "GROQ_MODEL_FAST",
+        "GROQ_MODEL_STRONG",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    return monkeypatch
+
+
+async def test_missing_api_key_raises(clean_env: pytest.MonkeyPatch) -> None:
+    # Provider mặc định là gemini → báo thiếu ĐÚNG tên biến của provider đó.
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        LLMClient()  # không truyền client → buộc phải dựng từ key → thiếu key → raise
+
+
+async def test_missing_api_key_names_the_selected_provider(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    # Đổi provider thì thông báo lỗi phải đổi theo — nếu không, user sẽ đi điền nhầm key.
+    clean_env.setenv("LLM_PROVIDER", "groq")
 
     with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
-        LLMClient()  # không truyền client → buộc phải dựng từ key → thiếu key → raise
+        LLMClient()
+
+
+async def test_unknown_provider_raises(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("LLM_PROVIDER", "openai")  # chưa hỗ trợ
+
+    with pytest.raises(ValueError, match="không hỗ trợ"):
+        LLMClient()
+
+
+async def test_provider_defaults_and_env_override(clean_env: pytest.MonkeyPatch) -> None:
+    """Model lấy đúng theo provider, và biến .env ghi đè được mặc định."""
+    fake = FakeLLM([])
+
+    # 1. Không khai báo gì → mặc định của gemini.
+    gemini = LLMClient(client=fake)
+    assert gemini.provider == "gemini"
+    assert gemini.model_fast == "gemini-flash-lite-latest"
+    assert gemini.model_strong == "gemini-flash-latest"
+
+    # 2. Đổi provider → bộ model mặc định đổi theo (không lẫn tên model của hãng kia).
+    groq = LLMClient(client=fake, provider="groq")
+    assert groq.model_strong == "llama-3.3-70b-versatile"
+
+    # 3. Biến môi trường theo tiền tố provider ghi đè mặc định.
+    clean_env.setenv("GEMINI_MODEL_STRONG", "gemini-3.5-flash")
+    assert LLMClient(client=fake).model_strong == "gemini-3.5-flash"
+
+
+async def test_gemini_uses_openai_compatible_base_url(clean_env: pytest.MonkeyPatch) -> None:
+    """Đây là mấu chốt khiến đổi provider chỉ tốn 1 file: cùng SDK, khác base_url."""
+    clean_env.setenv("GEMINI_API_KEY", "fake-key")
+
+    client = LLMClient()
+
+    assert "generativelanguage.googleapis.com" in client.config.base_url
+    assert client.config.base_url.endswith("/openai/")

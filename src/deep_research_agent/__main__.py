@@ -63,7 +63,9 @@ async def _main() -> int:
     )
     args = parser.parse_args()
 
-    llm = LLMClient()  # raise sớm nếu thiếu GROQ_API_KEY — lỗi cấu hình cần biết ngay
+    # raise sớm nếu thiếu API key của provider đang chọn (LLM_PROVIDER) — lỗi cấu hình
+    # cần biết ngay, đừng để chạy nửa chừng mới chết.
+    llm = LLMClient()
     if args.mode == "deep":
         result = await run_deep_pipeline(args.topic, llm=llm)
     else:

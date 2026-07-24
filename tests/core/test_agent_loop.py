@@ -53,13 +53,13 @@ class _FakeChat:
         self.completions = _FakeCompletions(contents)
 
 
-class FakeGroq:
+class FakeLLM:
     def __init__(self, contents: list[str]) -> None:
         self.chat = _FakeChat(contents)
 
 
-def _make_llm(decisions: list[str]) -> tuple[LLMClient, FakeGroq]:
-    fake = FakeGroq(decisions)
+def _make_llm(decisions: list[str]) -> tuple[LLMClient, FakeLLM]:
+    fake = FakeLLM(decisions)
     llm = LLMClient(client=fake, model_fast="fast-model", model_strong="strong-model")
     return llm, fake
 
